@@ -53,10 +53,10 @@ int main() {
 
 	//start in lane 1;
 	int lane = 1;
-	int lane_old = 1;
+	int message = 0;
 	int lane_change_wp = 0;
-
-	h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy, &lane,&lane_old, &lane_change_wp](uWS::WebSocket<uWS::SERVER> ws, char* data, size_t length,
+	
+	h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy, &lane, &message, &lane_change_wp ](uWS::WebSocket<uWS::SERVER> ws, char* data, size_t length,
 		uWS::OpCode opCode) {
 			// "42" at the start of the message means there's a websocket message event.
 			// The 4 signifies a websocket message
@@ -148,7 +148,7 @@ int main() {
 						bool overtake = false;
 						double safe_distance = car_speed_mps * 2;
 
-						//car is in my lane or lane to the left
+						//car is in my lane
 						if (!lanes[lane].empty() || !lanes[lane - 1].empty())
 						{
 							if (!lanes[lane].empty())
@@ -164,9 +164,13 @@ int main() {
 									{
 										closestDist_s = (check_car_s - car_s);
 										overtake = true;
-										std::cout << "Overtake!!!" << std::endl;
+										if (message != 4)
+										{
+											message = 4;
+											std::cout << "Overtake!!!" << std::endl;
+										}
 
-										if ((check_car_s - car_s) > safe_distance / 2)
+										if ((check_car_s - car_s) > safe_distance / 4)
 										{
 											//match that cars speed
 											ref_vel = check_speed * 2.237;
@@ -201,7 +205,12 @@ int main() {
 										double check_car_s = sensor_fusion[car][5];
 										check_car_s += ((double)prev_size * .02 * check_speed);
 										double dist_s = check_car_s - car_s;
-										if (dist_s <  safe_distance /2 && dist_s > -safe_distance / 3)
+
+										double safe_distance_back = 7;
+										if (2 * (check_speed - car_speed_mps) > safe_distance_back)
+											safe_distance_back = 2 * (check_speed - car_speed_mps);
+
+										if (dist_s <  safe_distance / 2 && dist_s>-safe_distance_back)
 										{
 											lane_safe = false;
 										}
@@ -212,7 +221,11 @@ int main() {
 									lane -= 1;
 									lane_change_wp = next_wp;
 									ref_vel = 49.5;
-									std::cout << "overtaking Left!!!" << std::endl;
+									if (message != 3)
+									{
+										message = 3;
+										std::cout << "overtaking Left!!!" << std::endl;
+									}
 								}
 							}
 							// no left lane change posible try right
@@ -230,7 +243,13 @@ int main() {
 										double check_car_s = sensor_fusion[car][5];
 										check_car_s += ((double)prev_size * .02 * check_speed);
 										double dist_s = check_car_s - car_s;
-										if (dist_s <  safe_distance * 2/3 && dist_s > -safe_distance / 3)
+
+										double safe_distance_back = 7;
+										if (2 * (check_speed - car_speed_mps) > safe_distance_back)
+											safe_distance_back = 2 * (check_speed - car_speed_mps);
+
+
+										if (dist_s <  safe_distance*1.5  && dist_s>-safe_distance_back)
 										{
 											lane_safe = false;
 										}
@@ -240,19 +259,28 @@ int main() {
 									lane += 1;
 									lane_change_wp = next_wp;
 									ref_vel = 49.5;
-									std::cout << "overtaking Right!!!" << std::endl;
+									if (message != 2)
+									{
+										message = 2;
+										std::cout << "overtaking Right!!!" << std::endl;
+									}
 
 								}
 
 							}//*/
-							goto Overtaking;
 						}//*/
 
+						//if(overtake)
+						//	goto Overtaking;
 
-						if (lane != 2)
+						if (lane != 2&& !overtake)
 						{
 							bool lane_safe = true;
-							std::cout << "Return Right!!!" << std::endl;
+							if (message != 1)
+							{
+								message = 1;
+								std::cout << "Return Right!!!" << std::endl;
+							}
 							if (!lanes[lane + 1].empty())
 								for (auto car : lanes[lane + 1])
 								{
@@ -263,7 +291,12 @@ int main() {
 									double check_car_s = sensor_fusion[car][5];
 									check_car_s += ((double)prev_size * .02 * check_speed);
 									double dist_s = check_car_s - car_s;
-									if (dist_s <  safe_distance * 1.5 && dist_s > -safe_distance / 6)
+
+									double safe_distance_back = 7;
+									if (2 * (check_speed - car_speed_mps) > safe_distance_back)
+										safe_distance_back = 2 * (check_speed - car_speed_mps);
+
+									if (dist_s <  safe_distance * 1.5 && dist_s > -safe_distance_back)
 									{
 										lane_safe = false;
 									}
@@ -273,13 +306,16 @@ int main() {
 								lane += 1;
 								lane_change_wp = next_wp;
 								ref_vel = 49.5;
-								std::cout << "Returning Right!!!" << std::endl;
-
+								if (message != 0)
+								{
+									message = 0;
+									std::cout << "Returning Right!!!" << std::endl;
+								}
 							}
 
 						}//*/
 
-					Overtaking:
+					//Overtaking:
 						vector<double> ptsx;
 						vector<double> ptsy;
 
