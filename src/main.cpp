@@ -53,10 +53,8 @@ int main() {
 
 	//start in lane 1;
 	int lane = 1;
-	int message = 0;
-	int lane_change_wp = 0;
-	
-	h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy, &lane, &message, &lane_change_wp ](uWS::WebSocket<uWS::SERVER> ws, char* data, size_t length,
+
+	h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy, &lane](uWS::WebSocket<uWS::SERVER> ws, char* data, size_t length,
 		uWS::OpCode opCode) {
 			// "42" at the start of the message means there's a websocket message event.
 			// The 4 signifies a websocket message
@@ -87,32 +85,76 @@ int main() {
 						double end_path_s = j[1]["end_path_s"];
 						double end_path_d = j[1]["end_path_d"];
 						vector<vector<double>> sensor_fusion = j[1]["sensor_fusion"];
+						/*std::sort(sensor_fusion.begin(),
+							sensor_fusion.end(),
+							[](const std::vector<double>& a, const std::vector<double>& b)
+							{
+								return a[3] < b[3];
+							});*/
 
-						vector<vector<int>>lanes;
-						vector<int> temp;
-						lanes.push_back(temp);
-						lanes.push_back(temp);
-						lanes.push_back(temp);
+
+						vector<vector<double>>lanes_temp;
+						vector<double> temp;
+
+
+						vector<vector<vector<double>>> front;
+						vector<vector<vector<double>>> back;
+						front.push_back(lanes_temp);
+						front.push_back(lanes_temp);
+						front.push_back(lanes_temp);
+						back.push_back(lanes_temp);
+						back.push_back(lanes_temp);
+						back.push_back(lanes_temp);
+
+						//lanes.push_back(temp);
+						//lanes.push_back(temp);
+						//lanes.push_back(temp);
+
+
 						//Expand sensor_fusion to contain lane number
 						for (int i = 0; i < sensor_fusion.size(); i++)
 						{
 							float d = sensor_fusion[i][6];
 							if (d < 4)
 							{
-								sensor_fusion[i].push_back(0);
-								lanes[0].push_back(i);
+								double distance = sensor_fusion[i][5] - car_s;
+								sensor_fusion[i].push_back(distance);
+								//lanes[0].push_back(i);
+								if (distance > 0)
+									front[0].push_back(sensor_fusion[i]);
+								else
+									back[0].push_back(sensor_fusion[i]);
+
 							}
 							else if (d < 8)
 							{
-								sensor_fusion[i].push_back(1);
-								lanes[1].push_back(i);
+								double distance = sensor_fusion[i][5] - car_s;
+								sensor_fusion[i].push_back(distance);
+								//lanes[1].push_back(i);
+								if (distance > 0)
+									front[1].push_back(sensor_fusion[i]);
+								else
+									back[1].push_back(sensor_fusion[i]);
 							}
 							else
 							{
-								sensor_fusion[i].push_back(2);
-								lanes[2].push_back(i);
+								double distance = sensor_fusion[i][5] - car_s;
+								sensor_fusion[i].push_back(distance);
+								//	lanes[2].push_back(i);
+								if (distance > 0)
+									front[2].push_back(sensor_fusion[i]);
+								else
+									back[2].push_back(sensor_fusion[i]);
 							}
 						}
+
+						std::sort(front[0].begin(), front[0].end(), [](const std::vector<double>& a, const std::vector<double>& b) {	return a[7] < b[7];	});
+						std::sort(front[1].begin(), front[1].end(), [](const std::vector<double>& a, const std::vector<double>& b) {	return a[7] < b[7];	});
+						std::sort(front[2].begin(), front[2].end(), [](const std::vector<double>& a, const std::vector<double>& b) {	return a[7] < b[7];	});
+
+						std::sort(back[0].begin(), back[0].end(), [](const std::vector<double>& a, const std::vector<double>& b) {	return a[7] > b[7];	});
+						std::sort(back[1].begin(), back[1].end(), [](const std::vector<double>& a, const std::vector<double>& b) {	return a[7] > b[7];	});
+						std::sort(back[2].begin(), back[2].end(), [](const std::vector<double>& a, const std::vector<double>& b) {	return a[7] > b[7];	});
 
 						double ref_vel = 49.5; //mph
 						double car_speed_mps = car_speed * 0.44704;
@@ -144,178 +186,444 @@ int main() {
 						}
 
 						//find ref_v to use
-						double closestDist_s = 100000;
 						bool overtake = false;
-						double safe_distance = car_speed_mps * 2;
+						double safe_distance = car_speed_mps;
+						double overtake_speed = 49.5;
 
-						//car is in my lane
-						if (!lanes[lane].empty() || !lanes[lane - 1].empty())
+						vector<double> car_Front;
+						//car is in front on my lane
+						if (!front[lane].empty())
 						{
-							if (!lanes[lane].empty())
-								for (auto car : lanes[lane])
-								{
-									double vx = sensor_fusion[car][3];
-									double vy = sensor_fusion[car][4];
-									double check_speed = sqrt(vx * vx + vy * vy);
-									double check_car_s = sensor_fusion[car][5];
-									check_car_s += ((double)prev_size * .02 * check_speed);
-									//check s values greater than mine and s gap
-									if ((check_car_s > car_s) && ((check_car_s - car_s) < safe_distance) && ((check_car_s - car_s) < closestDist_s))
-									{
-										closestDist_s = (check_car_s - car_s);
-										overtake = true;
-										if (message != 4)
-										{
-											message = 4;
-											std::cout << "Overtake!!!" << std::endl;
-										}
+							car_Front = front[lane][0];
+							double vx = car_Front[3];
+							double vy = car_Front[4];
+							double check_speed = sqrt(vx * vx + vy * vy);
 
-										if ((check_car_s - car_s) > safe_distance / 4)
-										{
-											//match that cars speed
-											ref_vel = check_speed * 2.237;
-										}
-										else
-										{
-											//go slightly slower than the cars speed
-											ref_vel = check_speed * 2.237 - 5;
-										}
-									}
+							car_Front.push_back(check_speed);
+
+							double check_car_s = car_Front[5];
+							check_car_s += ((double)prev_size * .02 * check_speed);
+
+							double dist_s = check_car_s - car_s;
+
+							car_Front.push_back(dist_s);
+							car_Front.push_back(check_speed);
+
+							//check s values greater than mine and s gap
+							if (((dist_s) < 2 * safe_distance))
+							{
+								overtake = true;
+								overtake_speed = check_speed * 2.237;
+								if ((check_car_s - car_s) > safe_distance / 2)
+								{
+									//match that cars speed
+									ref_vel = check_speed * 2.237;
 								}
+								else
+								{
+									//go slightly slower than the cars speed
+									ref_vel = check_speed * 2.237 - 5;
+								}
+							}
 						}
 
 						bool overtake_done = false;
 
 						//try to change lanes if too close to car in front
-						if (overtake && ((next_wp - lane_change_wp) % map_waypoints_x.size() > 2))
+						if (overtake)
 						{
-							// try to change to left lane
+							// try to change to left lane 
 							if (lane != 0)
 							{
-								bool lane_safe = true;
+								vector<double> car_F;
+								vector<double> car_B;
+								bool lane_safe_front = true;
+								bool lane_safe_back = true;
+								bool space = true;
+								double safe_distance_Front = 5;
+								double safe_distance_back = 5;
 
-								if (!lanes[lane - 1].empty())
-									for (auto car : lanes[lane - 1])
+
+								if (!front[lane - 1].empty() && !back[lane - 1].empty())
+								{
+									car_F = front[lane - 1][0];
+									car_B = back[lane - 1][0];
+									if (car_F[5] - car_B[5] < 15)
+										space = false;
+								}
+
+								//check car Front to the left
+								if (!front[lane - 1].empty())
+								{
+									if (car_F.empty())
+										car_F = front[lane - 1][0];
+
+									//car is in left lane
+									double vx = car_F[3];
+									double vy = car_F[4];
+									double check_speed = sqrt(vx * vx + vy * vy);
+
+
+									double check_car_s = car_F[5];
+									check_car_s += ((double)prev_size * .02 * check_speed);
+									double dist_s = check_car_s - car_s;
+
+									car_Front.push_back(dist_s);
+									car_Front.push_back(check_speed);
+
+
+									if ((car_speed_mps - check_speed) > safe_distance_Front)
+										safe_distance_Front = car_speed_mps - check_speed;
+
+									if (dist_s < safe_distance_Front || (check_speed < car_Front.back() + 5 && dist_s < (car_Front[7] + 5 + car_speed_mps - check_speed)))
 									{
-										//car is in left lane
-										double vx = sensor_fusion[car][3];
-										double vy = sensor_fusion[car][4];
-										double check_speed = sqrt(vx * vx + vy * vy);
+										lane_safe_front = false;
+										std::cout << "Front Left false: " << (dist_s < safe_distance_Front) << " || " << (check_speed < car_Front.back()) << " && " << (dist_s < (car_Front[7] + 5 + car_speed_mps - check_speed)) << std::endl;
+									}
+								}
 
-										double check_car_s = sensor_fusion[car][5];
-										check_car_s += ((double)prev_size * .02 * check_speed);
-										double dist_s = check_car_s - car_s;
+								//check car back to the left
+								if (!back[lane - 1].empty())
+								{
+									if (car_B.empty())
+										car_B = back[lane - 1][0];
 
-										double safe_distance_back = 7;
-										if (2 * (check_speed - car_speed_mps) > safe_distance_back)
-											safe_distance_back = 2 * (check_speed - car_speed_mps);
+									//car is in left lane
+									double vx = car_B[3];
+									double vy = car_B[4];
+									double check_speed = sqrt(vx * vx + vy * vy);
 
-										if (dist_s <  safe_distance / 2 && dist_s>-safe_distance_back)
+									double check_car_s = car_B[5];
+									check_car_s += ((double)prev_size * .02 * check_speed);
+									double dist_s = check_car_s - car_s;
+									car_Front.push_back(dist_s);
+									car_Front.push_back(check_speed);
+									if ((check_speed - car_speed_mps) > safe_distance_back)
+										safe_distance_back = (check_speed - car_speed_mps);
+
+
+									if (dist_s > -safe_distance_back)
+									{
+										lane_safe_back = false;
+										std::cout << "Back Left false: " << std::endl;
+										if (std::abs(dist_s) < std::abs(car_Front[7] - car_s) - 5)
 										{
-											lane_safe = false;
+											ref_vel += 5;
+											std::cout << "Accelerate. " << std::endl;
 										}
 									}
-								if (lane_safe && inCenter(lane, car_d))
+								}
+
+								if ((lane_safe_front || lane_safe_back) && inCenter(lane, car_d))
 								{
+									if (!car_F.empty())
+									{
+										if (car_F[7] < safe_distance_Front)
+										{
+											if (car_Front[7] - car_F[7] > 15 && ref_vel < 49.5)
+											{
+												ref_vel += 49.5;
+												std::cout << "Accelerate. " << std::endl;
+											}
+										}
+										else if (car_B.empty())
+										{
+											ref_vel -= 5;
+											std::cout << "Break. " << std::endl;
+										}
+										else if (space && (car_F[7] + car_B[7] < 0) && car_Front[7] > 10)
+										{
+											ref_vel += 5;
+											std::cout << "Accelerate. " << std::endl;
+										}
+										else
+										{
+											ref_vel -= 5;
+											std::cout << "Break. " << std::endl;
+										}
+									}
+									else
+									{
+										if (car_Front[7] - car_B[7] > 15 && ref_vel < 49.5)
+										{
+											ref_vel += 49.5;
+											std::cout << "Accelerate. " << std::endl;
+										}
+										else
+										{
+											ref_vel -= 5;
+											std::cout << "Break. " << std::endl;
+										}
+									}
 									overtake_done = true;
 									lane -= 1;
-									lane_change_wp = next_wp;
 									ref_vel = 49.5;
-									if (message != 3)
-									{
-										message = 3;
-										std::cout << "overtaking Left!!!" << std::endl;
-									}
 								}
 							}
 							// no left lane change posible try right
 							if (lane != 2 && !overtake_done)
 							{
-								bool lane_safe = true;
-
-								if (!lanes[lane + 1].empty())
-									for (auto car : lanes[lane + 1])
-									{
-										double vx = sensor_fusion[car][3];
-										double vy = sensor_fusion[car][4];
-										double check_speed = sqrt(vx * vx + vy * vy);
-
-										double check_car_s = sensor_fusion[car][5];
-										check_car_s += ((double)prev_size * .02 * check_speed);
-										double dist_s = check_car_s - car_s;
-
-										double safe_distance_back = 7;
-										if (2 * (check_speed - car_speed_mps) > safe_distance_back)
-											safe_distance_back = 2 * (check_speed - car_speed_mps);
+								vector<double> car_F;
+								vector<double> car_B;
+								bool lane_safe_front = true;
+								bool lane_safe_back = true;
+								bool space = true;
+								double safe_distance_Front = 5;
+								double safe_distance_back = 5;
 
 
-										if (dist_s <  safe_distance*1.5  && dist_s>-safe_distance_back)
-										{
-											lane_safe = false;
-										}
-									}
-								if (lane_safe && inCenter(lane, car_d))
+								if (!front[lane + 1].empty() && !back[lane - 1].empty())
 								{
-									lane += 1;
-									lane_change_wp = next_wp;
-									ref_vel = 49.5;
-									if (message != 2)
-									{
-										message = 2;
-										std::cout << "overtaking Right!!!" << std::endl;
-									}
-
+									car_F = front[lane + 1][0];
+									car_B = back[lane + 1][0];
+									if (car_F[5] - car_B[5] < 15)
+										space = false;
 								}
 
-							}//*/
-						}//*/
-
-						//if(overtake)
-						//	goto Overtaking;
-
-						if (lane != 2&& !overtake)
-						{
-							bool lane_safe = true;
-							if (message != 1)
-							{
-								message = 1;
-								std::cout << "Return Right!!!" << std::endl;
-							}
-							if (!lanes[lane + 1].empty())
-								for (auto car : lanes[lane + 1])
+								//check car Front to the Right
+								if (!front[lane + 1].empty())
 								{
-									double vx = sensor_fusion[car][3];
-									double vy = sensor_fusion[car][4];
+									if (car_F.empty())
+										car_F = front[lane + 1][0];
+
+									//car is in left lane
+									double vx = car_F[3];
+									double vy = car_F[4];
 									double check_speed = sqrt(vx * vx + vy * vy);
 
-									double check_car_s = sensor_fusion[car][5];
+
+									double check_car_s = car_F[5];
 									check_car_s += ((double)prev_size * .02 * check_speed);
 									double dist_s = check_car_s - car_s;
 
-									double safe_distance_back = 7;
-									if (2 * (check_speed - car_speed_mps) > safe_distance_back)
-										safe_distance_back = 2 * (check_speed - car_speed_mps);
+									car_Front.push_back(dist_s);
+									car_Front.push_back(check_speed);
 
-									if (dist_s <  safe_distance * 1.5 && dist_s > -safe_distance_back)
+
+									if ((car_speed_mps - check_speed) > safe_distance_Front)
+										safe_distance_Front = car_speed_mps - check_speed;
+
+									if (dist_s < safe_distance_Front || (check_speed < car_Front.back() + 5 && dist_s < (car_Front[7] + 5 + car_speed_mps - check_speed)))
 									{
-										lane_safe = false;
+										lane_safe_front = false;
+										std::cout << "Front Left false: " << (dist_s < safe_distance_Front) << " || " << (check_speed < car_Front.back()) << " && " << (dist_s < (car_Front[7] + 5 + car_speed_mps - check_speed)) << std::endl;
 									}
 								}
+
+								//check car back to the Right
+								if (!back[lane + 1].empty())
+								{
+									if (car_B.empty())
+										car_B = back[lane + 1][0];
+
+									//car is in left lane
+									double vx = car_B[3];
+									double vy = car_B[4];
+									double check_speed = sqrt(vx * vx + vy * vy);
+
+									double check_car_s = car_B[5];
+									check_car_s += ((double)prev_size * .02 * check_speed);
+									double dist_s = check_car_s - car_s;
+									car_Front.push_back(dist_s);
+									car_Front.push_back(check_speed);
+									if ((check_speed - car_speed_mps) > safe_distance_back)
+										safe_distance_back = (check_speed - car_speed_mps);
+
+
+									if (dist_s > -safe_distance_back)
+									{
+										lane_safe_back = false;
+										std::cout << "Back Left false: " << std::endl;
+										if (std::abs(dist_s) < std::abs(car_Front[7] - car_s) - 5)
+										{
+											ref_vel += 5;
+											std::cout << "Accelerate. " << std::endl;
+										}
+									}
+								}
+
+								if ((lane_safe_front || lane_safe_back) && inCenter(lane, car_d))
+								{
+									if (!car_F.empty())
+									{
+										if (car_F[7] < safe_distance_Front)
+										{
+											if (car_Front[7] - car_F[7] > 15 && ref_vel < 49.5)
+											{
+												ref_vel += 49.5;
+												std::cout << "Accelerate. " << std::endl;
+											}
+										}
+										else if (car_B.empty())
+										{
+											ref_vel -= 5;
+											std::cout << "Break. " << std::endl;
+										}
+										else if (space && (car_F[7] + car_B[7] < 0) && car_Front[7] > 10)
+										{
+											ref_vel += 5;
+											std::cout << "Accelerate. " << std::endl;
+										}
+										else
+										{
+											ref_vel -= 5;
+											std::cout << "Break. " << std::endl;
+										}
+									}
+									else
+									{
+										if (!car_B.empty())
+										{
+											if (car_Front[7] - car_B[7] > 15 && ref_vel < 49.5)
+											{
+												ref_vel += 49.5;
+												std::cout << "Accelerate. " << std::endl;
+											}
+										}
+										else
+										{
+											ref_vel -= 5;
+											std::cout << "Break. " << std::endl;
+										}
+									}
+									overtake_done = true;
+									lane -= 1;
+									ref_vel = 49.5;
+								}
+								/*bool lane_safe = true;
+
+
+								//check car Front to the right
+								if (!front[lane + 1].empty())
+								{
+									vector<double> car_F = front[lane + 1][0];
+
+									//car is in left lane
+									double vx = car_F[3];
+									double vy = car_F[4];
+									double check_speed = sqrt(vx * vx + vy * vy);
+
+									car_F.push_back(check_speed);
+
+									double check_car_s = car_F[5];
+									check_car_s += ((double)prev_size * .02 * check_speed);
+									double dist_s = check_car_s - car_s;
+
+									//if ((dist_s < 2 * safe_distance && check_speed < car_Front.back()) || dist_s < car_Front[7] + 2 * car_speed_mps)
+									double safe_distance_Front = 5;
+									if ((car_speed_mps - check_speed) > safe_distance_Front)
+										safe_distance_Front = car_speed_mps - check_speed;
+									if (dist_s < safe_distance_Front || (check_speed < car_Front.back() + 5 && dist_s < (car_Front[7] + 5 + car_speed_mps - check_speed)))
+									{
+										lane_safe = false;
+										std::cout << "Front Right false: " << (dist_s < safe_distance_Front) << " || " << (check_speed < car_Front.back()) << " && " << (dist_s < (car_Front[7] + 5 + car_speed_mps - check_speed)) << std::endl;
+										if (dist_s < safe_distance_Front)
+										{
+											if (car_Front[7] - dist_s > 10 && ref_vel < 49.5)
+											{
+												ref_vel += 49.5;
+												std::cout << "Accelerate. " << std::endl;
+											}
+											else
+											{
+												ref_vel -= 5;
+												std::cout << "Brake. " << std::endl;
+											}
+										}
+									}
+								}
+
+								//check car back to the right
+								if (!back[lane + 1].empty())
+								{
+									vector<double> car_B = back[lane + 1][0];
+
+									//car is in left lane
+									double vx = car_B[3];
+									double vy = car_B[4];
+									double check_speed = sqrt(vx * vx + vy * vy);
+
+									car_B.push_back(check_speed);
+
+									double check_car_s = car_B[5];
+									check_car_s += ((double)prev_size * .02 * check_speed);
+									double dist_s = check_car_s - car_s;
+
+									double safe_distance_back = 5;
+									if ((check_speed - car_speed_mps) > safe_distance_back)
+										safe_distance_back = (check_speed - car_speed_mps);
+
+
+									if (dist_s > -safe_distance_back)
+									{
+										lane_safe = false;
+										std::cout << "Back Right false: " << std::endl;
+										if (std::abs(dist_s) < std::abs(car_Front[7] - car_s) - 5)
+										{
+											ref_vel += 5;
+											std::cout << "Accelerate. " << std::endl;
+										}
+									}
+								}
+
+								if (lane_safe && inCenter(lane, car_d))
+								{
+									lane += 1;
+									ref_vel = 49.5;
+								}//*/
+
+							}
+						}
+
+						if (overtake)
+							goto Overtaking;
+
+						if (lane != 2 && !overtake && (car_speed > 40))
+						{
+							bool lane_safe = true;
+							if (!front[lane + 1].empty())
+							{
+								double vx = front[lane + 1][0][3];
+								double vy = front[lane + 1][0][4];
+								double check_speed = sqrt(vx * vx + vy * vy);
+
+								double check_car_s = front[lane + 1][0][5];
+								check_car_s += ((double)prev_size * .02 * check_speed);
+								double dist_s = check_car_s - car_s;
+
+								if (dist_s < safe_distance * 2.2)
+								{
+									lane_safe = false;
+								}
+							}
+							if (!back[lane + 1].empty())
+							{
+								double vx = back[lane + 1][0][3];
+								double vy = back[lane + 1][0][4];
+								double check_speed = sqrt(vx * vx + vy * vy);
+
+								double check_car_s = back[lane + 1][0][5];
+								check_car_s += ((double)prev_size * .02 * check_speed);
+								double dist_s = check_car_s - car_s;
+
+								double safe_distance_back = 5;
+								if ((check_speed - car_speed_mps) > safe_distance_back)
+									safe_distance_back = (check_speed - car_speed_mps);
+
+								if (dist_s > -safe_distance_back)
+								{
+									lane_safe = false;
+								}
+							}
 							if (lane_safe && inCenter(lane, car_d))
 							{
 								lane += 1;
-								lane_change_wp = next_wp;
 								ref_vel = 49.5;
-								if (message != 0)
-								{
-									message = 0;
-									std::cout << "Returning Right!!!" << std::endl;
-								}
 							}
 
 						}//*/
 
-					//Overtaking:
+					Overtaking:
 						vector<double> ptsx;
 						vector<double> ptsy;
 

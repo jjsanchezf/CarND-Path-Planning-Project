@@ -163,7 +163,6 @@ bool inCenter(int lane, unsigned car_d)
 {
 	unsigned low = (2 + 4 * lane - 0.5);
 	unsigned high = (2 + 4 * lane + 0.5);
-	std::cout << "min: " << low <<" value: "<< car_d<<" max: " << high<< std::endl;
 
 	return  ((car_d - low) <= (high - low));
 }
