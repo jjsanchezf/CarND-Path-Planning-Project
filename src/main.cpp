@@ -342,19 +342,20 @@ int main() {
 											std::cout << "Break. " << std::endl;
 										}
 									}
-									else
+									else if(!car_B.empty())
 									{
 										if (car_Front[7] - car_B[7] > 15 && ref_vel < 49.5)
 										{
 											ref_vel += 49.5;
 											std::cout << "Accelerate. " << std::endl;
 										}
-										else
-										{
-											ref_vel -= 5;
-											std::cout << "Break. " << std::endl;
-										}
 									}
+									else
+									{
+										ref_vel -= 5;
+										std::cout << "Break. " << std::endl;
+									}
+									
 									overtake_done = true;
 									lane -= 1;
 									ref_vel = 49.5;
@@ -470,22 +471,20 @@ int main() {
 											std::cout << "Break. " << std::endl;
 										}
 									}
-									else
-									{
-										if (!car_B.empty())
+									else if (!car_B.empty())
+									{				
+										if (car_Front[7] - car_B[7] > 15 && ref_vel < 49.5)
 										{
-											if (car_Front[7] - car_B[7] > 15 && ref_vel < 49.5)
-											{
-												ref_vel += 49.5;
-												std::cout << "Accelerate. " << std::endl;
-											}
-										}
-										else
-										{
-											ref_vel -= 5;
-											std::cout << "Break. " << std::endl;
+											ref_vel += 49.5;
+											std::cout << "Accelerate. " << std::endl;
 										}
 									}
+									else
+									{
+										ref_vel -= 5;
+										std::cout << "Break. " << std::endl;
+									}
+									
 									overtake_done = true;
 									lane -= 1;
 									ref_vel = 49.5;
