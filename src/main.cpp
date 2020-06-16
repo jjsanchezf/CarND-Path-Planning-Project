@@ -202,7 +202,7 @@ int main() {
                     double check_car_s = sensor_fusion[car][5];
                     check_car_s += ((double)prev_size * .02 * check_speed);
                     double dist_s = check_car_s - car_s;
-                    if ((dist_s <  safe_distance / 3 && dist_s > -safe_distance / 4) || (car_speed_mps * 1.05 > check_speed && dist_s < closestDist_s + 3 && dist_s > 0))
+                    if ((dist_s <  safe_distance / 3 && dist_s > -safe_distance / 4) || (speed_overtake * 1.05 > check_speed && dist_s < closestDist_s +5 && dist_s > 0))
                     {
                       lane_safe = false;
                     }
@@ -230,7 +230,7 @@ int main() {
                     double check_car_s = sensor_fusion[car][5];
                     check_car_s += ((double)prev_size * .02 * check_speed);
                     double dist_s = check_car_s - car_s;
-                    if ((dist_s <  safe_distance / 2 && dist_s > -safe_distance / 4) || (car_speed_mps * 1.05 > check_speed && dist_s < closestDist_s + 3 && dist_s > 0))
+                    if ((dist_s <  safe_distance / 2 && dist_s > -safe_distance / 4) || (speed_overtake * 1.05 > check_speed && dist_s < closestDist_s + 5 && dist_s > 0))
                     {
                       lane_safe = false;
                     }

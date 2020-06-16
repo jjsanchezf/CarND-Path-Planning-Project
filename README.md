@@ -1,5 +1,43 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
+
+### Reflection
+
+#### Trajectory Planning
+
+In order to navigate a car through a highway, the car needs to know where it is located, and where are the other cars as well. To perform such operation in cartesian coordinates it is a complicated matter since the highway does not follow a straight path and its center coordinates change continuously. Therefore, the Frenet coordinates are used where the center of the highway is the “Zero” point for the “d” coordinate that runs perpendicular to the highway, and the “s” coordinate runs along the highway. Taking this into account, if we want the car to travel on a single lane, the “d” coordinate would remain constant though time, and the “s” coordinate would increase to move forward and decrease to go backwards.
+
+The simulator provides us with the map waypoints, but these are unevenly spread throughout the highway, and since our car will visit one point every 0.2 seconds, the points passed back as trajectory to the simulator need to be spread accordingly in order to achieve a desired velocity. 
+
+Instead of using the Frenet coordinates given by the simulator, only three points (30, 60, and 90 mts for “s” and “d” corresponding to the desired lane) are used to achieve a path that is nice and smooth, and does not experience any max acceleration or high jerk values. 
+
+To make the car speed up and slow down at a constant acceleration less than 10 m/s^2, the current velocity is gradually incremented or decremented by a constant value until it is matched to the reference velocity.
+
+As mentioned before, the car will visit one point every 0.2 seconds. For that reason, the separation of the waypoints needs to be accordingly calculated so the car can travel at the desired speed. To do this the three previously defined points are converted to the local vehicle coordinate system, having the heading of the vehicle be Zero degrees. By doing this, the spline of the points can be linearly approximated.
+
+#### Behavior Planning
+
+For the behavior planning specific rules are applied. Such rules use a calcualted "Safe Distance" that deppends on the speed of the vehicle.
+
+* If there is no other car in front of the vehicle, the reference speed is set to 49.5 MPH.
+* The ego vehicle will try to always drive on the right lane of the road. In case the vehicle is not on the right, it will try to navigate swithcing lanes to the right if the following rules are met:
+  * There is no car in the lane to the right blocking its way
+  * The car is traveling at least at 40 MPH
+  * No overtake procedure is being performed
+* If a car is detected in front of the vehicle traveling at a slower speed and closer than the "Safe Distance", the vehicle will initiate an overtake procedure.
+  * First it will search for a posibility to move to the left lane (if not already on the furter left lane). The vehicle will not move to the left if:
+    * There are cars on the left lane at certain distance to the front and to the back
+    * There is a car  traveling at least 5% slower than the car in front, and is not at least 5 mts further away
+  * If no overtaking on the left is possible, the vehicly will try to pass on the right following the same rules
+  * If no overtake maneuver is possible at all the vehicle will follow the next rules
+    * Maintain speed if the distance to the vehicle is grater than 2/3 of the Safe Distance
+    * Gradualy reduce the speed by 10% of the speed diference if the distance is smaller than 2/3 of the Safe Distance
+    * Match the vehicle's speed if the distance is smaller than 1/3 but more that 1/4 of the Safe Distance
+    * Travel 5MPH slower that the other vehicle if the distance is smaller than 1/4 of the Safe Distance
+    
+The lane change logic is quite simple, if there was a car in front of the ego vehicle then it would see if it was safe to change to the left lane, if the left lane was not safe then it would try to change to the right lane. Some improvements could be made to this lane change algorithm by using a cost function to decide what lane is the optimal. Currently the car was able to go 4.17 miles around the highway without any incidents in 5:10 minutes.
+
+ [![MPC in action](images/video.png)](https://youtu.be/AlfIHm8tlWQ)
    
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases/tag/T3_v1.2).  
